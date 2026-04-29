@@ -1,0 +1,45 @@
+[[runners]]
+  name = "incus-container-template"
+  url = "https://gitlab.com"
+  token = "REDACTED"
+  executor = "instance"
+
+  [runners.autoscaler]
+    plugin = "fleeting-plugin-incus"
+    capacity_per_instance = 1
+    max_use_count = 1
+    max_instances = 20
+
+  [runners.autoscaler.plugin_config]
+    connection_type = "https"
+    endpoint = "https://incus.example.com:8443"
+    tls_client_cert = "/etc/gitlab-runner/incus-client.crt"
+    tls_client_key = "/etc/gitlab-runner/incus-client.key"
+    tls_ca = "/etc/gitlab-runner/incus-ca.crt"
+    # Set to true only when you intentionally want to bypass HTTPS certificate
+    # and hostname verification for a trusted endpoint.
+    # insecure_skip_verify = true
+    project = "gitlab-runners"
+    name_prefix = "gl-ct-"
+    pool_id = "container-template"
+    pool_config_key = "fleeting.pool"
+    instance_type = "container"
+    # Set to true only when the workload requires a privileged container.
+    # privileged = true
+    max_size = 20
+    profiles = ["default", "gitlab-runner-container"]
+    network = "gitlab-runners"
+    ssh_username = "runner"
+    # No ssh_public_key_path is configured here because this template is assumed
+    # to already contain the runner user's authorized key. The matching private
+    # key path is configured below in connector_config.
+
+    [runners.autoscaler.plugin_config.template]
+      name = "gitlab-runner-container-template"
+      instance_only = true
+
+  [runners.autoscaler.connector_config]
+    protocol = "ssh"
+    username = "runner"
+    key_path = "/etc/gitlab-runner/runner"
+    use_external_addr = false

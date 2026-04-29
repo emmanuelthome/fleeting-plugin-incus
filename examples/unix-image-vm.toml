@@ -1,0 +1,33 @@
+[[runners]]
+  name = "incus-vm"
+  url = "https://gitlab.com"
+  token = "REDACTED"
+  executor = "instance"
+
+  [runners.autoscaler]
+    plugin = "fleeting-plugin-incus"
+    capacity_per_instance = 1
+    max_use_count = 1
+    max_instances = 10
+
+  [runners.autoscaler.plugin_config]
+    connection_type = "unix"
+    project = "gitlab-runners"
+    name_prefix = "gl-vm-"
+    pool_id = "vm-default"
+    instance_type = "virtual-machine"
+    max_size = 10
+    profiles = ["default", "gitlab-runner-vm"]
+    network = "gitlab-runners"
+    ssh_username = "runner"
+    ssh_public_key_path = "/etc/gitlab-runner/runner.pub"
+
+    [runners.autoscaler.plugin_config.image]
+      alias = "ubuntu/24.04/cloud"
+
+  [runners.autoscaler.connector_config]
+    protocol = "ssh"
+    username = "runner"
+    key_path = "/etc/gitlab-runner/runner"
+    use_external_addr = false
+
