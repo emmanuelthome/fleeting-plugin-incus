@@ -107,6 +107,7 @@ func (g *InstanceGroup) createRequest(name string) api.InstancesPost {
 			}
 		}
 	}
+	applyRootDiskOverrides(devices, cfg.StoragePool, cfg.RootDiskSize)
 
 	// InstancesPost is the Incus API request body for creating either a container
 	// or VM. Start=true asks Incus to boot/start the instance immediately after
@@ -213,9 +214,57 @@ func (g *InstanceGroup) resolveTemplateSource(client incusclient.Client, req *ap
 		}
 		mergedDevices[deviceName] = copiedDevice
 	}
+	cfg, _ := g.snapshot()
+	applyRootDiskOverrides(mergedDevices, cfg.StoragePool, cfg.RootDiskSize)
 	req.Devices = api.DevicesMap(mergedDevices)
 
 	return nil
+}
+
+func applyRootDiskOverrides(devices map[string]map[string]string, storagePool string, rootDiskSize string) {
+	// Incus applies per-instance disk devices over profile devices. When users
+	// configure storage_pool or root_disk_size, add just enough of a root disk
+	// device to override those fields while preserving any explicit device
+	// options already present.
+	if storagePool == "" && rootDiskSize == "" {
+		return
+	}
+
+	deviceName := rootDiskDeviceName(devices)
+	device := devices[deviceName]
+	if device == nil {
+		device = map[string]string{}
+		devices[deviceName] = device
+	}
+	if device["type"] == "" {
+		device["type"] = "disk"
+	}
+	if device["path"] == "" {
+		device["path"] = "/"
+	}
+	if storagePool != "" {
+		device["pool"] = storagePool
+	}
+	if rootDiskSize != "" {
+		device["size"] = rootDiskSize
+	}
+}
+
+func rootDiskDeviceName(devices map[string]map[string]string) string {
+	for deviceName, device := range devices {
+		if device["type"] == "disk" && device["path"] == "/" {
+			return deviceName
+		}
+	}
+	if _, exists := devices["root"]; !exists {
+		return "root"
+	}
+	for i := 1; ; i++ {
+		deviceName := fmt.Sprintf("root%d", i)
+		if _, exists := devices[deviceName]; !exists {
+			return deviceName
+		}
+	}
 }
 
 type imageLookupClient interface {
@@ -261,7 +310,6 @@ func cachedImageFingerprintForAlias(client imageLookupClient, alias string, inst
 
 	return "", fmt.Errorf("no cached local image matched alias %q", alias)
 }
-
 
 func imageAliasMatchScore(image api.Image, alias string) int {
 	alias = strings.Trim(strings.ToLower(alias), "/")

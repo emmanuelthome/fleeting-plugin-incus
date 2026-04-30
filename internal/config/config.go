@@ -93,11 +93,13 @@ type Config struct {
 	// this way to avoid colliding with the embedded Config type in provider code,
 	// but its public JSON/TOML key remains `config`.
 	InstanceType   string                       `json:"instance_type"`
-	Privileged    bool                         `json:"privileged"`
+	Privileged     bool                         `json:"privileged"`
 	Profiles       []string                     `json:"profiles"`
 	InstanceConfig map[string]string            `json:"config"`
 	Devices        map[string]map[string]string `json:"devices"`
 	Target         string                       `json:"target"`
+	StoragePool    string                       `json:"storage_pool"`
+	RootDiskSize   string                       `json:"root_disk_size"`
 
 	// Exactly one source must be configured: image launch or local template copy.
 	Image    *ImageSource    `json:"image"`

@@ -53,6 +53,8 @@ Core fields:
 | `profiles` | no | Incus profiles to apply. |
 | `config` | no | Extra Incus instance config. Do not set `cloud-init.user-data` when `ssh_public_key` or `ssh_public_key_path` is configured. |
 | `devices` | no | Extra Incus devices. |
+| `storage_pool` | no | Optional Incus storage pool override for the created instance root disk. |
+| `root_disk_size` | no | Optional Incus root disk size override, for example `30GiB`. |
 | `target` | no | Optional Incus cluster member target. |
 | `ssh_public_key` or `ssh_public_key_path` | no | Optional public key injected through `cloud-init.user-data`. Omit both when the image/template already has usable SSH credentials. |
 
@@ -97,6 +99,8 @@ instance_only = true
     max_size = 10
     instance_type = "virtual-machine"
     profiles = ["default", "gitlab-runner"]
+    storage_pool = "fast"
+    root_disk_size = "30GiB"
     network = "gitlab-runners"
     ssh_username = "runner"
     ssh_public_key_path = "/etc/gitlab-runner/runner.pub"

@@ -211,12 +211,12 @@ func TestImageAliasMatchScore(t *testing.T) {
 func TestCreateRequestAddsConfiguredNetworkDevice(t *testing.T) {
 	group := &InstanceGroup{cfg: config.Normalized{
 		Config: config.Config{
-			NamePrefix:        "ci-",
-			PoolID:            "pool-a",
-			InstanceType:      config.InstanceContainer,
-			Image:             &config.ImageSource{Alias: "ubuntu/24.04"},
-			Network:           "uplink",
-			NetworkInterface:  "enp5s0",
+			NamePrefix:       "ci-",
+			PoolID:           "pool-a",
+			InstanceType:     config.InstanceContainer,
+			Image:            &config.ImageSource{Alias: "ubuntu/24.04"},
+			Network:          "uplink",
+			NetworkInterface: "enp5s0",
 		},
 		NormalizedPoolConfigKey: "user.fleeting.pool",
 		ConnectorConfig: provider.ConnectorConfig{
@@ -267,6 +267,64 @@ func TestCreateRequestKeepsExplicitNetworkDevice(t *testing.T) {
 	}
 }
 
+func TestCreateRequestAddsRootDiskOverrides(t *testing.T) {
+	group := &InstanceGroup{cfg: config.Normalized{
+		Config: config.Config{
+			NamePrefix:   "ci-",
+			PoolID:       "pool-a",
+			InstanceType: config.InstanceContainer,
+			Image:        &config.ImageSource{Alias: "ubuntu/24.04"},
+			StoragePool:  "fast",
+			RootDiskSize: "30GiB",
+		},
+		NormalizedPoolConfigKey: "user.fleeting.pool",
+		ConnectorConfig: provider.ConnectorConfig{
+			Username: "runner",
+		},
+	}}
+
+	req := group.createRequest("ci-test")
+	device, ok := req.Devices["root"]
+	if !ok {
+		t.Fatal("root disk device not added")
+	}
+	if device["type"] != "disk" || device["path"] != "/" || device["pool"] != "fast" || device["size"] != "30GiB" {
+		t.Fatalf("root disk device = %#v", device)
+	}
+}
+
+func TestCreateRequestMergesRootDiskOverrides(t *testing.T) {
+	group := &InstanceGroup{cfg: config.Normalized{
+		Config: config.Config{
+			NamePrefix:   "ci-",
+			PoolID:       "pool-a",
+			InstanceType: config.InstanceContainer,
+			Image:        &config.ImageSource{Alias: "ubuntu/24.04"},
+			RootDiskSize: "50GiB",
+			Devices: map[string]map[string]string{
+				"custom-root": {
+					"type": "disk",
+					"path": "/",
+					"pool": "slow",
+				},
+			},
+		},
+		NormalizedPoolConfigKey: "user.fleeting.pool",
+		ConnectorConfig: provider.ConnectorConfig{
+			Username: "runner",
+		},
+	}}
+
+	req := group.createRequest("ci-test")
+	device, ok := req.Devices["custom-root"]
+	if !ok {
+		t.Fatal("custom root disk device missing")
+	}
+	if device["pool"] != "slow" || device["size"] != "50GiB" {
+		t.Fatalf("root disk override did not merge: %#v", device)
+	}
+}
+
 func TestResolveTemplateSourceMergesTemplateDevices(t *testing.T) {
 	group := &InstanceGroup{}
 	client := &fakeClient{instances: map[string]api.Instance{
@@ -303,6 +361,41 @@ func TestResolveTemplateSourceMergesTemplateDevices(t *testing.T) {
 	}
 	if req.Devices["eth0"]["network"] != "managed-net" {
 		t.Fatalf("explicit device override lost: %#v", req.Devices["eth0"])
+	}
+}
+
+func TestResolveTemplateSourceAppliesRootDiskOverrides(t *testing.T) {
+	group := &InstanceGroup{cfg: config.Normalized{
+		Config: config.Config{
+			StoragePool:  "fast",
+			RootDiskSize: "40GiB",
+		},
+	}}
+	client := &fakeClient{instances: map[string]api.Instance{
+		"template": {
+			Name: "template",
+			InstancePut: api.InstancePut{Devices: map[string]map[string]string{
+				"root": {
+					"type": "disk",
+					"path": "/",
+					"pool": "default",
+				},
+			}},
+		},
+	}}
+	req := api.InstancesPost{
+		Source: api.InstanceSource{
+			Type:   "copy",
+			Source: "template",
+		},
+	}
+
+	if err := group.resolveTemplateSource(client, &req); err != nil {
+		t.Fatalf("resolveTemplateSource() error = %v", err)
+	}
+	device := req.Devices["root"]
+	if device["pool"] != "fast" || device["size"] != "40GiB" {
+		t.Fatalf("root disk override not applied: %#v", device)
 	}
 }
 
