@@ -31,49 +31,99 @@ Place the binary on the GitLab Runner manager host `PATH`, or install it through
 
 Configure this under `[runners.autoscaler.plugin_config]`.
 
-Core fields:
+### Connection
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `connection_type` | no | `unix` or `https`; defaults to `unix`. |
+| `endpoint` | for `connection_type = "https"` | Incus HTTPS endpoint, for example `https://incus.example.com:8443`. |
+| `socket_path` | no | Unix socket path; empty uses Incus client defaults. |
+| `project` | no | Incus project to use. |
+| `tls_client_cert`, `tls_client_key` | no | Client certificate and key paths, or inline PEM contents; for HTTPS they default to `~/.config/incus/client.crt` and `~/.config/incus/client.key` when both are omitted. |
+| `tls_server_cert`, `tls_ca` | no | Server certificate or CA path, or inline PEM contents. |
+| `insecure_skip_verify` | no | For HTTPS connections, disables TLS certificate and hostname verification. Useful for self-signed certificates or hostname mismatches, but should only be used for explicitly trusted endpoints. When set, `tls_server_cert` is ignored for the TLS handshake so that the skip actually takes effect. Prefer `tls_server_cert` or `tls_ca` when you can validate the server properly. |
+| `connect_timeout` | no | Timeout for each Incus operation at connection time, as a Go duration string (e.g. `"30s"`). Defaults to `30s`. |
+| `operation_timeout` | no | Timeout for Incus instance operations such as create and start, as a Go duration string (e.g. `"5m"`). Defaults to `5m`. |
+
+### Pool identity
 
 | Field | Required | Description |
 | --- | --- | --- |
 | `name_prefix` | yes | Required prefix for every managed instance name. |
 | `pool_id` | yes | Pool identity value written into Incus instance config. |
-| `ssh_username` | yes | User GitLab Runner should SSH as. |
-| `endpoint` | for `connection_type = "https"` | Incus HTTPS endpoint, for example `https://incus.example.com:8443`. |
-| `network` | if profiles/devices do not define a usable NIC | Optional Incus managed network name to attach as a NIC on created instances. If omitted, networking falls back to the selected profiles and explicit `devices`; set this when those do not already define a usable NIC. |
-| `connection_type` | no | `unix` or `https`; defaults to `unix`. |
-| `socket_path` | no | Unix socket path; empty uses Incus client defaults. |
-| `project` | no | Incus project to use. |
-| `tls_client_cert`, `tls_client_key` | no | Client certificate and key paths, or inline PEM contents; for HTTPS they default to `~/.config/incus/client.crt` and `~/.config/incus/client.key` when both are omitted. |
-| `tls_server_cert`, `tls_ca` | no | Server certificate or CA path, or inline PEM contents. |
-| `insecure_skip_verify` | no | For HTTPS connections, disables TLS certificate and hostname verification. This is useful for self-signed certificates or name mismatches, but should only be used for explicitly trusted endpoints. |
 | `pool_config_key` | no | Incus user config key without `user.`; defaults to `fleeting.pool`. |
 | `max_size` | no | Maximum managed instances; `0` means no plugin-side cap. |
+
+`pool_config_key` is normalized before API calls. For example, `pool_config_key = "fleeting.pool"` is stored and matched as `user.fleeting.pool`.
+
+### Instance
+
+| Field | Required | Description |
+| --- | --- | --- |
 | `instance_type` | no | `container` or `virtual-machine`; defaults to `container`. |
 | `privileged` | no | For `instance_type = "container"`, requests a privileged Incus container by setting `security.privileged=true` on created instances. |
 | `profiles` | no | Incus profiles to apply. |
 | `config` | no | Extra Incus instance config. Do not set `cloud-init.user-data` when `ssh_public_key` or `ssh_public_key_path` is configured. |
 | `devices` | no | Extra Incus devices. |
-| `storage_pool` | no | Optional Incus storage pool override for the created instance root disk. |
-| `root_disk_size` | no | Optional Incus root disk size override, for example `30GiB`. |
-| `target` | no | Optional Incus cluster member target. |
-| `ssh_public_key` or `ssh_public_key_path` | no | Optional public key injected through `cloud-init.user-data`. Omit both when the image/template already has usable SSH credentials. |
+| `storage_pool` | no | Incus storage pool override for the created instance root disk. |
+| `root_disk_size` | no | Root disk size override, for example `30GiB`. |
+| `target` | no | Incus cluster member to place the instance on. |
 
-`pool_config_key` is normalized before API calls. For example, `pool_config_key = "fleeting.pool"` is stored and matched as `user.fleeting.pool`.
+### Networking and address selection
 
-Exactly one source must be configured:
+| Field | Required | Description |
+| --- | --- | --- |
+| `network` | if profiles/devices do not define a usable NIC | Incus managed network name to attach as a NIC on created instances. If omitted, networking falls back to the selected profiles and explicit `devices`. |
+| `network_interface` | no | Name of the NIC inside the instance to prefer when selecting the address returned to GitLab Runner (e.g. `eth0`). Also used as the device name when `network` injects a NIC and no explicit device with that name exists in `devices`. When unset, the plugin prefers the first Incus-managed NIC (identified by a non-empty host-side interface name). Set this explicitly on instances that run additional software—such as Docker—that creates internal bridge interfaces, to ensure Runner always receives a reachable address rather than an address on an unreachable internal bridge. |
+| `address_family` | no | `inet` (IPv4) or `inet6` (IPv6); defaults to `inet`. |
+| `os` | no | OS hint returned to Fleeting connector; defaults to `linux`. |
+| `arch` | no | Architecture hint returned to Fleeting connector; defaults to `amd64`. |
+
+### SSH
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `ssh_username` | yes | User GitLab Runner should SSH as. |
+| `ssh_public_key` or `ssh_public_key_path` | no | Public key injected through `cloud-init.user-data`. Omit both when the image/template already has usable SSH credentials. |
+
+### Connector tuning
+
+These fields nest under `[runners.autoscaler.plugin_config.connector]`.
+
+| Field | Description |
+| --- | --- |
+| `keepalive` | SSH keepalive interval as a Go duration string; overrides Fleeting's default. |
+| `timeout` | SSH connection timeout as a Go duration string; overrides Fleeting's default. |
+
+### Image source
+
+Exactly one of `[image]` or `[template]` must be configured.
 
 ```toml
 [runners.autoscaler.plugin_config.image]
 alias = "ubuntu/24.04/cloud"
 ```
 
-or:
+| Field | Description |
+| --- | --- |
+| `alias` | Incus image alias, for example `ubuntu/24.04/cloud`. Resolved to a fingerprint before creation. |
+| `fingerprint` | Exact image fingerprint. More reproducible than `alias` when builds must not drift. |
+| `properties` | Image metadata key/value map; used when neither `alias` nor `fingerprint` is set. |
+| `project` | Incus project to look up the image in. Defaults to the plugin's configured `project`. |
+
+### Template source
 
 ```toml
 [runners.autoscaler.plugin_config.template]
 name = "gitlab-runner-template"
 instance_only = true
 ```
+
+| Field | Description |
+| --- | --- |
+| `name` | Name of the source instance or snapshot to copy. |
+| `project` | Incus project containing the template. Defaults to the plugin's configured `project`. |
+| `instance_only` | When `true`, snapshots from the source are not copied. |
 
 ## GitLab Runner Example
 
@@ -123,8 +173,9 @@ Configure SSH access under `[runners.autoscaler.connector_config]`. `key_path` i
 - If your image/template already contains the SSH user and authorized key, omit both SSH public key fields and point `[runners.autoscaler.connector_config].key_path` at the matching private key on the Runner host. In that mode, cloud-init support is not required by the plugin.
 - If you provide your own `config.cloud-init.user-data` while omitting the plugin SSH public key fields, cloud-init support is required by your own instance config rather than by the plugin.
 - Set `privileged = true` only for container workloads that require privileged Incus containers. This option is rejected for virtual machines.
-- If you connect over HTTPS to an endpoint with a self-signed certificate or hostname mismatch, you can set `insecure_skip_verify = true`. Prefer `tls_server_cert` or `tls_ca` when you can validate the server properly.
+- If you connect over HTTPS to an endpoint with a self-signed certificate or hostname mismatch, set `insecure_skip_verify = true`. Do not also set `tls_server_cert` in that case: the Incus client library only applies `InsecureSkipVerify` when no pinned server certificate is present, so a combined configuration silently falls back to cert-pinning and hostname verification still fails. Prefer `tls_server_cert` or `tls_ca` when you can validate the server properly.
 - Ensure the selected profiles/devices provide network connectivity to the Runner manager. If they do not define a usable NIC, configure `network` explicitly.
+- If your instances run additional software that creates internal bridge interfaces (for example Docker's `docker0`), set `network_interface` to the name of the Incus-managed NIC (e.g. `eth0`). Without it, the plugin prefers Incus-managed NICs automatically, but an explicit setting is more robust.
 - Use a dedicated Incus project where possible.
 - Do not reuse the same `name_prefix` and `pool_id` across unrelated pools.
 

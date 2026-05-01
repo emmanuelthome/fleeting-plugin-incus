@@ -66,9 +66,30 @@ func SelectAddress(state *api.InstanceState, preferredInterface string, family s
 		}
 	}
 
+	// First pass: prefer Incus-managed NICs. Incus stores a host-side interface
+	// name (HostName) for every device it manages, such as the veth peer for
+	// containers or the TAP device for VMs. Interfaces created inside the
+	// instance by other software—Docker bridges, virbr*, etc.—are unknown to
+	// Incus and therefore have HostName == "". Preferring the Incus-managed NIC
+	// avoids returning an address from an internal bridge that the Runner manager
+	// cannot reach.
 	for name, network := range state.Network {
-		// Skip loopback even if it has a global-looking address; Runner needs an
-		// address reachable from the manager process.
+		if name == "lo" || network.Type == "loopback" {
+			continue
+		}
+		if network.HostName == "" {
+			continue
+		}
+		if addr := selectAddressFromNetwork(network, family); addr != "" {
+			return addr
+		}
+	}
+
+	// Second pass: fall back to any non-loopback global address. This handles
+	// configurations where Incus does not populate HostName (e.g. certain VM
+	// setups) so that address selection still works without requiring an explicit
+	// network_interface setting.
+	for name, network := range state.Network {
 		if name == "lo" || network.Type == "loopback" {
 			continue
 		}

@@ -57,6 +57,45 @@ func TestSelectAddress(t *testing.T) {
 	}
 }
 
+func TestSelectAddressSkipsInternalBridge(t *testing.T) {
+	// Instances running Docker (or other container runtimes) internally expose
+	// additional bridge interfaces such as docker0. Incus does not manage those
+	// interfaces and therefore leaves their HostName empty. SelectAddress should
+	// prefer the Incus-managed NIC (HostName set) over any internal bridge so
+	// that GitLab Runner always receives a reachable address.
+	state := &api.InstanceState{Network: map[string]api.InstanceStateNetwork{
+		"lo": {
+			Type: "loopback",
+			Addresses: []api.InstanceStateNetworkAddress{
+				{Family: "inet", Scope: "local", Address: "127.0.0.1"},
+			},
+		},
+		"eth0": {
+			// HostName is set: Incus manages this NIC (veth peer on the host).
+			HostName: "veth3a1b2c",
+			State:    "up",
+			Type:     "broadcast",
+			Addresses: []api.InstanceStateNetworkAddress{
+				{Family: "inet", Scope: "global", Address: "10.10.10.20"},
+			},
+		},
+		"docker0": {
+			// HostName is empty: Docker created this bridge inside the instance;
+			// Incus has no host-side counterpart for it.
+			HostName: "",
+			State:    "up",
+			Type:     "broadcast",
+			Addresses: []api.InstanceStateNetworkAddress{
+				{Family: "inet", Scope: "global", Address: "172.17.0.1"},
+			},
+		},
+	}}
+
+	if got := SelectAddress(state, "", "inet"); got != "10.10.10.20" {
+		t.Fatalf("SelectAddress() = %q, want 10.10.10.20 (Incus-managed NIC)", got)
+	}
+}
+
 func TestDecreaseRefusesUnmanagedInstance(t *testing.T) {
 	cfg := config.Normalized{
 		Config: config.Config{

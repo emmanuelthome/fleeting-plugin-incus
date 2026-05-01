@@ -56,6 +56,16 @@ func New(ctx context.Context, cfg config.Normalized) (incus.InstanceServer, erro
 		return nil, fmt.Errorf("read tls_ca: %w", err)
 	}
 
+	// The Incus client library only applies InsecureSkipVerify when no server
+	// certificate is provided. If tls_server_cert is also set, the library
+	// silently ignores InsecureSkipVerify and falls back to cert-pinning mode,
+	// which still enforces hostname verification. To honour the user's intent of
+	// skipping all TLS verification, clear the server cert so the library sees
+	// tlsRemoteCert == nil and applies InsecureSkipVerify unconditionally.
+	if cfg.InsecureSkipVerify {
+		tlsServerCert = ""
+	}
+
 	// ConnectionArgs is shared by Unix and HTTPS clients. TLS fields are ignored
 	// for Unix sockets, but setting them once keeps the connection branch simple.
 	args := &incus.ConnectionArgs{
