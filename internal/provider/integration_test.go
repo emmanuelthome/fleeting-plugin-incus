@@ -119,6 +119,7 @@ func TestIntegrationTemplateLifecycle(t *testing.T) {
 
 	group := &InstanceGroup{Config: providerConfigForIntegration(it, project, network, "tmpl")}
 	group.Image = api.InstanceSource {
+                Type: "copy",
                 Source: templateName,
                 InstanceOnly: true,
             }
@@ -434,6 +435,7 @@ func providerConfigForIntegration(it integrationConfig, project string, network 
 		Network:            network,
 		NetworkInterface:   "eth0",
 		Image: api.InstanceSource{
+                        Type: "image",
 			Alias:   it.ImageAlias,
 			Project: it.ImageProject,
 		},

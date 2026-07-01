@@ -128,10 +128,10 @@ must be an exact match among the existing aliases.
 | `project` | Incus project to look up the image in. Defaults to the plugin's configured `project`. |
 
 In order to copy an existing instance as a template, you can use this
-example configuration:
+example configuration instead of the above:
 
 ```toml
-[runners.autoscaler.plugin_config.template]
+[runners.autoscaler.plugin_config.image]
 type = "copy"
 source = "gitlab-runner-template"
 instance_only = true
