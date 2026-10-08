@@ -272,6 +272,7 @@ func (g *InstanceGroup) ConnectInfo(ctx context.Context, instance string) (fleet
 	// ConnectInfo tells GitLab Runner how to reach a worker. It does not create
 	// credentials; it returns the SSH username/key policy determined in Init and
 	// the current address discovered from Incus runtime state.
+        g.logger.Info("Heartbeat on instance", "name", instance)
 	cfg, client := g.snapshot()
 	inst, _, err := client.GetInstance(instance)
 	if err != nil {
@@ -286,6 +287,7 @@ func (g *InstanceGroup) ConnectInfo(ctx context.Context, instance string) (fleet
 	// Incus separates static instance config from runtime state. Network
 	// addresses live in runtime state, so fetch it after confirming ownership.
 	state, _, err := client.GetInstanceState(instance)
+        g.logger.Info("Heartbeat on instance", "name", instance, "state", state)
 	if err != nil {
 		return fleeting.ConnectInfo{}, err
 	}
